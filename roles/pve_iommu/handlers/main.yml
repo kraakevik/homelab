@@ -1,0 +1,19 @@
+- name: Update proxmox-boot-tool
+  ansible.builtin.command: proxmox-boot-tool refresh
+  changed_when: false
+
+- name: Update initramfs
+  ansible.builtin.command: update-initramfs -u
+  changed_when: false
+
+- name: Reboot
+  ansible.builtin.reboot:
+    msg: "IOUMMU Updated, rebooting machine!"
+
+- name: Verify IOMMU enabled # noqa: risky-shell-pipe
+  ansible.builtin.shell:
+    cmd: 'dmesg | grep "DMAR: IOMMU enabled"'
+  register: iommu_result
+  failed_when: iommu_result.rc != 0
+  changed_when: false
+  check_mode: false

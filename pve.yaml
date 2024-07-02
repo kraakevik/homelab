@@ -10,4 +10,4 @@
     - pve_repositories
     - pve_reverse_proxy
     - pve_banner_remove
-    - pve_ioummu
+    - pve_iommu

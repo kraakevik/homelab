@@ -1,0 +1,26 @@
+- name: Add cmdline default
+  ansible.builtin.lineinfile:
+    path: /etc/kernel/cmdline
+    regexp: '^root=ZFS=rpool/ROOT/pve-1 boot=zfs'
+    line: 'root=ZFS=rpool/ROOT/pve-1 boot=zfs intel_iommu=on rootdelay=10'
+    mode: '644'
+    state: present
+    create: true
+  register: grub
+  notify:
+    - Update proxmox-boot-tool
+    - Reboot
+
+- name: Create vfio.conf
+  ansible.builtin.copy:
+    dest: /etc/modules
+    mode: "0644"
+    content: |
+      vfio
+      vfio_iommu_type1
+      vfio_pci
+      vfio_virqfd
+  notify:
+    - Update initramfs
+    - Reboot
+    - Verify IOMMU enabled
