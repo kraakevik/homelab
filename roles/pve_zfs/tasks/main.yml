@@ -1,0 +1,26 @@
+- name: Check ZFS pool existence
+  ansible.builtin.command: zpool list -Ho name vmpool
+  register: result_pool_list
+  ignore_errors: true
+  changed_when: false
+
+- name: Check if zfspool is added in Proxmox
+  ansible.builtin.shell:
+    cmd: pvesm status -enabled | grep vmpool
+  register: result_proxmox_storage_list
+  ignore_errors: true
+  changed_when: false
+  failed_when: result_proxmox_storage_list.rc == 2
+
+- name: Import existing pool for M.2 NVMEs
+  ansible.builtin.command: zpool import -f vmpool
+  when:
+    - zfs_pool_state | default('present') == 'present'
+    - result_pool_list.rc == 1
+  changed_when: false
+
+- name: Import pool as storage for proxmox
+  ansible.builtin.command: pvesm add zfspool vmpool -pool vmpool
+  when:
+    - result_proxmox_storage_list.rc == 1
+  changed_when: false

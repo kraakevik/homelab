@@ -1,0 +1,25 @@
+- name: Check if subscription banner hack is applied
+  ansible.builtin.shell:
+    cmd: cat /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js | grep "if (false)"
+  register: banner_hack
+  changed_when: false
+  ignore_errors: true
+
+# Remove the annoying banner
+- name: Remove banner # noqa command-instead-of-module
+  ansible.builtin.command: >-
+    sed -i.backup -z "s/res === null
+    || res === undefined
+    || \!res
+    || res\n\t\t\t.data.status.toLowerCase() \!== 'active'/false/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+  register: result
+  changed_when: false
+  when:
+    - banner_hack.rc != 0
+
+- name: Restart pve-proxy proxy
+  ansible.builtin.systemd_service:
+    state: restarted
+    name: pveproxy.service
+  when:
+    - banner_hack.rc != 0

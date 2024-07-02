@@ -1,0 +1,13 @@
+- name: Setup the PVE node
+  hosts: pve.chk.no
+  vars:
+    pve_domain: pve.chk.no
+    pve_node_name: pve
+    pve_dns_plugin_name: cloudflare
+  roles:
+    - pve_acme
+    - pve_zfs
+    - pve_repositories
+    - pve_reverse_proxy
+    - pve_banner_remove
+    - pve_ioummu

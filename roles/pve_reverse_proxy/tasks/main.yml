@@ -1,0 +1,61 @@
+- name: Install packages
+  ansible.builtin.apt:
+    name: nginx
+    update_cache: true
+
+- name: Start and enable nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Remove default host in nginx
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: "{{ item.state }}"
+    mode: "0644"
+  with_items:
+    - path: /etc/nginx/sites-available/default
+      state: "absent"
+    - path: /etc/nginx/sites-enabled/default
+      state: "absent"
+
+- name: Add virtualhost in nginx for {{ pve_node_name }}
+  ansible.builtin.template:
+    src: pve_vhost.j2
+    dest: "/etc/nginx/sites-available/pve_vhost"
+    backup: true
+    mode: "0644"
+
+- name: Enable pve_host virtualhost
+  ansible.builtin.file:
+    dest: /etc/nginx/sites-enabled/pve_vhost
+    src: /etc/nginx/sites-available/pve_vhost
+    state: link
+
+- name: Create a nginx.service override directory
+  ansible.builtin.file:
+    owner: root
+    group: root
+    mode: "0755"
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+
+- name: Set up nginx.service override
+  community.general.ini_file:
+    dest: /etc/systemd/system/nginx.service.d/nginx.conf
+    owner: root
+    group: root
+    mode: "0644"
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - section: "Unit"
+      option: "Requires"
+      value: "pve-cluster.service"
+    - section: "Unit"
+      option: "After"
+      value: "pve-cluster.service"
+  notify:
+    - Restart nginx

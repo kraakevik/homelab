@@ -1,0 +1,68 @@
+- name: Check ACME account
+  ansible.builtin.shell:
+    cmd: pvesh get /cluster/acme/account | grep default
+  register: acme_registrered
+  changed_when: false
+  ignore_errors: true
+
+- name: Check ACME Plugin
+  ansible.builtin.shell:
+    cmd: pvesh get /cluster/acme/plugins/ | grep {{ pve_dns_plugin_name }}
+  register: acme_plugin
+  changed_when: false
+  ignore_errors: true
+
+- name: Check if certificate configured
+  ansible.builtin.shell:
+    cmd: pvesh get /nodes/{{ pve_node_name }}/config | grep {{ pve_domain }}
+  register: acme_certificate
+  changed_when: false
+  ignore_errors: true
+
+# Get TOS url
+- name: Get ACME ToS URL
+  ansible.builtin.command: pvesh get /cluster/acme/tos
+  changed_when: false
+  register: tos_url
+  when:
+    - acme_registrered.rc != 0
+
+- name: Register ACME account
+  ansible.builtin.command: pvesh create /cluster/acme/account -contact christian@chk.no -tos_url {{ tos_url.stdout }}
+  changed_when: false
+  when:
+    - acme_registrered.rc != 0
+
+- name: Get cf_token from Bitwarden
+  ansible.builtin.set_fact:
+    acme_cf_token: "{{ lookup('bitwarden.secrets.lookup', 'c601ba64-7729-4e01-b927-b1a001893e1a') }}"
+  when:
+    - acme_plugin.rc != 0
+
+- name: Get cf_account from Bitwarden
+  ansible.builtin.set_fact:
+    acme_account_id: "{{ lookup('bitwarden.secrets.lookup', 'fe355515-f2ed-4fa0-8285-b1a00188d319') }}"
+  when:
+    - acme_plugin.rc != 0
+
+- name: Setup cloudflare ACME plugin
+  vars:
+    acme_plugin_data: |
+      CF_Account_ID={{ acme_account_id }}
+      CF_Token={{ acme_cf_token }}
+  ansible.builtin.command: pvesh create /cluster/acme/plugins/ -id {{ pve_dns_plugin_name }} -api cf -type dns -data {{ acme_plugin_data | b64encode }}
+  changed_when: false
+  when:
+    - acme_plugin.rc != 0
+
+- name: Setup certificate
+  ansible.builtin.command: pvesh set /nodes/{{ pve_node_name }}/config -acmedomain0 "{{ pve_domain }},plugin={{ pve_dns_plugin_name }}"
+  changed_when: false
+  when:
+    - acme_certificate.rc != 0
+
+- name: Order certificate
+  ansible.builtin.command: pvesh create /nodes/{{ pve_node_name }}/certificates/acme/certificate
+  changed_when: false
+  when:
+    - acme_certificate.rc != 0
