@@ -5,9 +5,12 @@
     pve_node_name: pve
     pve_dns_plugin_name: cloudflare
   roles:
-    - pve_acme
-    - pve_zfs
-    - pve_repositories
-    - pve_reverse_proxy
-    - pve_banner_remove
-    - pve_iommu
+    # - pve_acme
+    # - pve_zfs
+    # - pve_repositories
+    # - pve_reverse_proxy
+    # - pve_banner_remove
+    # - pve_iommu
+    # - pve_terraform_user
+    # - pve_base_template
+    - tailnet

@@ -1,0 +1,54 @@
+- name: Check if role exsists
+  ansible.builtin.shell:
+    cmd: pveum role list | grep terraform
+  register: pve_roles
+  changed_when: false
+  ignore_errors: true
+
+- name: Check if user exists
+  ansible.builtin.shell:
+    cmd: pveum user list | grep terraform
+  register: pve_user
+  changed_when: false
+  ignore_errors: true
+
+- name: Add terraform provision role  # noqa command-instead-of-module
+  ansible.builtin.command: >-
+    pveum role add terraform -privs
+      "Datastore.AllocateSpace
+       Datastore.Audit
+       Pool.Allocate
+       Sys.Audit
+       Sys.Console
+       Sys.Modify
+       VM.Allocate
+       VM.Audit
+       VM.Clone
+       VM.Config.CDROM
+       VM.Config.Cloudinit
+       VM.Config.CPU
+       VM.Config.Disk
+       VM.Config.HWType
+       VM.Config.Memory
+       VM.Config.Network
+       VM.Config.Options
+       VM.Migrate
+       VM.Monitor
+       VM.PowerMgmt
+       SDN.Use"
+  changed_when: false
+  when:
+    - pve_roles.rc != 0
+
+- name: Add terraform user  # noqa command-instead-of-module
+  ansible.builtin.command: >-
+    pveum user add terraform@pve --password {{ lookup('bitwarden.secrets.lookup', '7a4f65d4-1532-4b46-a0e2-b1a300bff43b') }}
+  register: result
+  changed_when: false
+  when:
+    - pve_user.rc != 0
+
+- name: Add terraform role to terraform user  # noqa command-instead-of-module
+  ansible.builtin.command: pveum aclmod / -user terraform@pve -role terraform
+  register: result
+  changed_when: false

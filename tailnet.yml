@@ -1,0 +1,19 @@
+- name: Provision the tailnet VM
+  hosts: 127.0.0.1
+  roles:
+    - bws_cli
+    - tailnet_vm
+
+- name: Setup the tailnet VM
+  hosts: tailnet.chk.no
+  roles:
+    - role: artis3n.tailscale
+      vars:
+        tailscale_verbose: true
+        tailscale_authkey: "{{ lookup('env', 'TAILSCALE_OAUTH_CLIENT_SECRET') }}"
+        tailscale_tags:
+          - "oauth"
+        tailscale_oauth_ephemeral: true
+        tailscale_oauth_preauthorized: false
+        tailscale_args: "--advertise-routes=192.168.1.0/24"
+    - role: tailnet_provision

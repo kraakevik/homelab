@@ -1,0 +1,6 @@
+- name: Get and install bws cli in local path
+  delegate_to: localhost
+  ansible.builtin.unarchive:
+    src: https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu-0.5.0.zip
+    dest: /home/{{ lookup('env', 'USER') }}/.local/bin/
+    remote_src: yes
