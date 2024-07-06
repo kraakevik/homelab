@@ -13,4 +13,3 @@
     # - pve_iommu
     # - pve_terraform_user
     # - pve_base_template
-    - tailnet

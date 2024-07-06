@@ -1,0 +1,29 @@
+- name: Setup bindmounts
+  hosts: pve.chk.no
+  roles:
+    - pve_download_debian
+
+
+- name: SAMBA | Provision the samba LXC container
+  hosts: 127.0.0.1
+  roles:
+    - bws_cli
+    - samba_lxc
+
+- name: Setup bindmounts
+  hosts: pve.chk.no
+  tasks:
+    - name: SAMBA | Add bindmount to lxc config
+      ansible.builtin.lineinfile:
+        path: /etc/pve/lxc/101.conf
+        line: mp0:/media,mp=/media
+
+- name: Setup the samba LXC container
+  hosts: samba.chk.no
+  tasks:
+    - name: SAMBA | Add samba
+      ansible.builtin.apt:
+        name: samba
+        update_cache: true
+  roles:
+    - role: samba_provision

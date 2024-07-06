@@ -1,0 +1,34 @@
+version: 3.7.1
+services:
+    transmission-openvpn:
+        container_name: TransmissionVPN
+        restart: unless-stopped 
+        labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.transmission.rule=Host(`transmission.chk.no`)"
+        - "traefik.http.routers.transmission.entrypoints=websecure"
+        - "traefik.http.routers.transmission.tls.certresolver=le"
+        - "traefik.http.services.transmission.loadbalancer.server.port=9091"
+        cap_add:
+            - NET_ADMIN
+        volumes:
+            - ./protonvpn/:/etc/openvpn/custom/
+            - ./transmission/:/config # where transmission-home is stored
+            - /media:/media # where transmission will store the data
+        environment:
+            - OPENVPN_PROVIDER=custom
+            - OPENVPN_CONFIG=no13.protonvpn.udp
+            - OPENVPN_USERNAME={{ ovpn_username }}
+            - OPENVPN_PASSWORD={{ ovpn_password }}
+            - TRANSMISSION_RPC_USERNAME={{ tr_username }}
+            - TRANSMISSION_RPC_PASSWORD={{ tr_password }}
+            - TRANSMISSION_RPC_AUTHENTICATION_REQUIRED=true
+            - TRANSMISSION_DOWNLOAD_DIR=/media/torrents/completed
+            - TRANSMISSION_INCOMPLETE_DIR=/media/torrents/incomplete
+            - TRANSMISSION_INCOMPLETE_DIR_ENABLED=true
+            - LOCAL_NETWORK=192.168.1.0/24
+        logging:
+            driver: json-file
+            options:
+                max-size: 10m
+        image: haugene/transmission-openvpn

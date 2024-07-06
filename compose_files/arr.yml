@@ -1,0 +1,92 @@
+version: 3.7.1
+services:
+  sonarr: 
+    image: lscr.io/linuxserver/sonarr:latest 
+    container_name: sonarr 
+    hostname: sonarr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.chk.no`)"
+      - "traefik.http.routers.sonarr.entrypoints=websecure"
+      - "traefik.http.routers.sonarr.tls.certresolver=le"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+    volumes: 
+      - ./sonarr:/config 
+      - /media:/media
+    environment:
+      - PUID=0 
+      - PGID=0
+      - TZ=Etc/UTC
+    restart: unless-stopped 
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.chk.no`)"
+      - "traefik.http.routers.prowlarr.entrypoints=websecure"
+      - "traefik.http.routers.prowlarr.tls.certresolver=le"
+      - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
+    container_name: prowlarr
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - ./prowlarr/data:/config
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`radarr.chk.no`)"
+      - "traefik.http.routers.radarr.entrypoints=websecure"
+      - "traefik.http.routers.radarr.tls.certresolver=le"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+    container_name: radarr
+    environment:
+      - PUID=0 
+      - PGID=0 
+      - TZ=Etc/UTC
+    volumes:
+      - ./radarr:/config
+      - /media:/media
+    restart: unless-stopped
+
+  unpackerr:
+    image: golift/unpackerr
+    container_name: unpackerr
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.unpackerr.rule=Host(`unpackerr.chk.no`)"
+      - "traefik.http.routers.unpackerr.entrypoints=websecure"
+      - "traefik.http.routers.unpackerr.tls.certresolver=le"
+      - "traefik.http.services.unpackerr.loadbalancer.server.port=5656"
+    volumes:
+      - /media:/media
+      - /media/torrents:/data/
+    restart: always
+    user: 0:0
+    environment:
+      - TZ=Etc/UTC
+      - UN_LOG_FILE=/downloads/unpackerr.log
+      - UN_SONARR_0_URL=https://sonarr.chk.no
+      - UN_SONARR_0_API_KEY={{ sonarr_api_key}}
+      - UN_RADARR_0_URL=https://radarr.chk.no
+      - UN_RADARR_0_API_KEY={{ radarr_api_key }}
+      - UN_FOLDER_0_PATH=/media/
+
+  jellyfin-auto-collections:
+    #build: .
+    image: ghcr.io/ghomashudson/jellyfin-auto-collections:latest
+    container_name: jellyfin-auto-collections
+    environment:
+      - CRONTAB=0 0 * * *
+      - TZ=Etc/UTC
+      - JELLYFIN_SERVER_URL=https://jellyfin.chk.no
+      - JELLYFIN_API_KEY={{ jellyfin_api_key }}
+      - JELLYFIN_USER_ID={{ jellyfin_user_id }}
+    volumes:
+      - ./jellyfin-auto-collections/config:/app/config
+    restart: unless-stopped

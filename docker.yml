@@ -1,0 +1,210 @@
+- name: Docker | Terraform create
+  hosts: 127.0.0.1
+  tasks:
+    - name: Get cf_s3_key from Bitwarden
+      ansible.builtin.set_fact:
+        cf_access_key: "{{ lookup('bitwarden.secrets.lookup', '4f175ca2-04dd-434a-9e59-b1a400bddbc7') }}"
+
+    - name: Get cf_s3_secret from Bitwarden
+      ansible.builtin.set_fact:
+        cf_secret_key: "{{ lookup('bitwarden.secrets.lookup', 'c547034a-9705-445d-a1b5-b1a400bdef6b') }}"
+
+    - name: Apply terraform/docker
+      community.general.terraform:
+        project_path: 'terraform/docker'
+        state: "present"
+        force_init: true
+        init_reconfigure: true
+        binary_path: "/usr/bin/tofu"
+        backend_config:
+          access_key: "{{ cf_access_key }}"
+          secret_key: "{{ cf_secret_key }}"
+
+- name: Setup bindmounts
+  hosts: pve.chk.no
+  tasks:
+    - name: Docker | Check iGPU passtrough
+      ansible.builtin.shell:
+        cmd: qm config 102 | grep 0000:00:02.0
+      register: passtrough_result
+      changed_when: false
+      ignore_errors: true
+    - name: Docker | Add iGPU
+      ansible.builtin.command: qm set 102 -hostpci0 0000:00:02.0,pcie=on
+      changed_when: false
+      when:
+        passtrough_result.rc != 0
+    - name: Docker | Reset VM
+      ansible.builtin.command: qm stop 102
+      changed_when: false
+      when:
+        passtrough_result.rc != 0
+    - name: Docker | Start VM
+      ansible.builtin.command: qm start 102
+      changed_when: false
+      when:
+        passtrough_result.rc != 0
+
+
+- name: Docker | Provision VM
+  hosts: docker.chk.no
+  tasks:
+    - name: Install required system packages
+      ansible.builtin.apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - virtualenv
+          - python3-setuptools
+          - python3-docker
+          - docker-compose
+          - cifs-utils
+        state: present
+        update_cache: true
+      become: true
+
+    - name: Mount media SMB volume
+      ansible.posix.mount:
+        src: //192.168.1.30/media
+        path: /media
+        opts: "rw,guest,vers=3,file_mode=0600,dir_mode=0700,uid=nobody,noperm"
+        fstype: cifs
+        state: mounted
+      become: true
+
+    - name: Add Docker GPG apt Key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      become: true
+
+    - name: Add Docker Repository
+      ansible.builtin.apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+      become: true
+
+    - name: Update apt and install docker-ce
+      ansible.builtin.apt:
+        name: docker-ce
+        state: present
+        update_cache: true
+      become: true
+
+    - name: Get cf_dns_token from Bitwarden
+      ansible.builtin.set_fact:
+        cf_secret_key: "{{ lookup('bitwarden.secrets.lookup', 'c601ba64-7729-4e01-b927-b1a001893e1a') }}"
+
+    - name: Copy nginx template to host
+      ansible.builtin.template:
+        src: compose_files/traefik.yml
+        dest: /home/debian/traefik.yml
+        mode: '0644'
+
+    - name: Create and start nginx-ingress-manager
+      community.docker.docker_compose_v2:
+        project_src: /home/debian/
+        files:
+          - traefik.yml
+      become: true
+
+    - name: Jellyfin | Find render group
+      ansible.builtin.shell:
+        cmd: "getent group render | cut -d: -f3"
+      register: render_group
+
+    - name: Jellyfin | Render group fact
+      ansible.builtin.set_fact:
+        render_group: "{{ render_group.stdout }}"
+
+    - name: Jellyfin | Copy template to host
+      ansible.builtin.template:
+        src: compose_files/jellyfin.yml
+        dest: /home/debian/jellyfin.yml
+        mode: '0644'
+
+    - name: Jellyfin | Create and start
+      community.docker.docker_compose_v2:
+        project_src: /home/debian/
+        files:
+          - jellyfin.yml
+      become: true
+
+    - name: Transmission |  proton_ovpn username
+      ansible.builtin.set_fact:
+        ovpn_username: "{{ lookup('bitwarden.secrets.lookup', '88ecb855-9e2b-40e8-b08e-b1a401862a82') }}"
+
+    - name: Transmission |  proton_ovpn password
+      ansible.builtin.set_fact:
+        ovpn_password: "{{ lookup('bitwarden.secrets.lookup', 'd6e333ef-5629-476a-8498-b1a401863bb0') }}"
+
+    - name: Transmission |  login username
+      ansible.builtin.set_fact:
+        tr_username: "{{ lookup('bitwarden.secrets.lookup', 'd5dcecdc-3d2e-428b-8647-b1a40186049b') }}"
+
+    - name: Transmission |  login password
+      ansible.builtin.set_fact:
+        tr_password: "{{ lookup('bitwarden.secrets.lookup', '0c708c0d-71b2-4944-9f42-b1a4018610bc') }}"
+
+    - name: Transmission | Copy
+      ansible.builtin.template:
+        src: compose_files/transmission.yml
+        dest: /home/debian/transmission.yml
+        mode: '0644'
+
+    - name: Transmission | Get proton config from Bitwarden
+      ansible.builtin.set_fact:
+        proton_config: "{{ lookup('bitwarden.secrets.lookup', 'a87adfba-91ed-4f8c-9b7c-b1a401802e79') }}"
+
+    - name: Transmission | Copy openvpn config to host
+      ansible.builtin.copy:
+        content: "{{ proton_config }}"
+        dest: /home/debian/protonvpn/no13.protonvpn.udp.ovpn
+        mode: '0644'
+      become: true
+
+    - name: Transmission | Copy port forwarder script
+      ansible.builtin.template:
+        src: compose_files/update-port.sh
+        dest: /home/debian/protonvpn/update-port.sh
+        mode: '0755'
+      become: true
+
+    - name: Transmission | Start
+      community.docker.docker_compose_v2:
+        project_src: /home/debian/
+        files:
+          - transmission.yml
+      become: true
+
+    - name: Sonarr | Get secret jellyfin_api_key
+      ansible.builtin.set_fact:
+        jellyfin_api_key: "{{ lookup('bitwarden.secrets.lookup', 'f440032a-2a06-4988-8e7b-b1a5015fc845') }}"
+
+    - name: Sonarr | Get secret jellyfin_user_id
+      ansible.builtin.set_fact:
+        jellyfin_user_id: "{{ lookup('bitwarden.secrets.lookup', 'd279b279-79f5-427f-8184-b1a5015fd3ab') }}"
+
+    - name: Sonarr | Get secret radarr_api_key
+      ansible.builtin.set_fact:
+        radarr_api_key: "{{ lookup('bitwarden.secrets.lookup', 'f35407f7-413e-44a6-b2c7-b1a5015ffd84') }}"
+
+    - name: Sonarr | Get secret sonarr_api_key
+      ansible.builtin.set_fact:
+        sonarr_api_key: "{{ lookup('bitwarden.secrets.lookup', '253c0798-29b8-4c84-bfcb-b1a5015feb22') }}"
+
+    - name: Sonarr | Copy
+      ansible.builtin.template:
+        src: compose_files/arr.yml
+        dest: /home/debian/arr.yml
+        mode: '0644'
+
+    - name: Sonarr | Start
+      community.docker.docker_compose_v2:
+        project_src: /home/debian/
+        files:
+          - arr.yml
+      become: true

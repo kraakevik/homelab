@@ -1,0 +1,18 @@
+- name: Get cf_s3_key from Bitwarden
+  ansible.builtin.set_fact:
+    cf_access_key: "{{ lookup('bitwarden.secrets.lookup', '4f175ca2-04dd-434a-9e59-b1a400bddbc7') }}"
+
+- name: Get cf_s3_secret from Bitwarden
+  ansible.builtin.set_fact:
+    cf_secret_key: "{{ lookup('bitwarden.secrets.lookup', 'c547034a-9705-445d-a1b5-b1a400bdef6b') }}"
+
+- name: Create the samba LXC container with terraform
+  community.general.terraform:
+    project_path: 'terraform/samba'
+    state: "present"
+    force_init: true
+    init_reconfigure: true
+    binary_path: "/usr/bin/tofu"
+    backend_config:
+      access_key: "{{ cf_access_key }}"
+      secret_key: "{{ cf_secret_key }}"

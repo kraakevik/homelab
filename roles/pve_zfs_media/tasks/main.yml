@@ -1,0 +1,42 @@
+- name: ZFS | Check media_pool exists
+  ansible.builtin.command: zpool list -Ho name media_pool
+  register: result_pool_list
+  ignore_errors: true
+  changed_when: false
+
+- name: ZFS | Check if media dataset is created
+  ansible.builtin.command: zfs list media_pool/media
+  register: result_dataset
+  ignore_errors: true
+  changed_when: false
+  failed_when: result_dataset.rc != 0
+
+- name: ZFS | Create media pool
+  vars:
+    pool_name: media_pool
+    disk_1: ata-ST18000NM003D-3DL103_ZVT7BTGX
+    disk_2: ata-ST18000NM003D-3DL103_ZVT7BTNA
+    disk_3: ata-ST18000NM003D-3DL103_ZVT7BTNS
+    disk_4: ata-ST18000NM003D-3DL103_ZVTD4DH7
+  ansible.builtin.command: >-
+    zpool create -f {{ pool_name }}
+    -o ashift=12 raidz1
+    /dev/disk/by-id/{{ disk_1 }}
+    /dev/disk/by-id/{{ disk_2 }}
+    /dev/disk/by-id/{{ disk_3 }}
+    /dev/disk/by-id/{{ disk_4 }}
+  changed_when: false
+  when:
+    - result_pool_list.rc == 1
+
+- name: ZFS | Create a dataset on the media pool
+  ansible.builtin.command: >-
+    zfs create
+    -o mountpoint=/media
+    -o recordsize=1M
+    -o compression=lz4
+    -o atime=off
+    media_pool/media
+  changed_when: false
+  when:
+    - result_dataset.rc != 0
