@@ -15,3 +15,7 @@ BWS_ACCESS_TOKEN=<token_to_bitwarden_secrets_manager>
 2. Install requirements `pip3 install -r requirements.txt`
 3. Ensure `BWS_ACCESS_TOKEN` is present in environment for Bitwarden Secrets Manager.
 4. Run `pve.yaml` playbook with `ansible-playbook -i hosts.yml pve.yaml`
+
+### Example setup Docker node with iGPU passtrough and *arr stack
+1. 1-3 as above..
+4. Run `docker.yaml` playbook with `ansible-playbook -i hosts.yml docker.yaml`
